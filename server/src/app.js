@@ -18,12 +18,12 @@ app.use(cookieParser())
 
 //importing routers here
 
-// import userRouter from "./routers/user.routers.js";
-// import vehicleRouter from "./routers/vehicle.routers.js";
-// import registrationRouter from "./routers/registration.routers.js";
+import userRouter from "./routers/user.routers.js";
+import vehicleRouter from "./routers/vehicle.routers.js";
+import registrationRouter from "./routers/registration.routers.js";
 
-// app.use("/api/v1/users", userRouter);
-// app.use("/api/v1/vehicles", vehicleRouter);
-// app.use("/api/v1/registrations", registrationRouter);
+app.use("/api/v1/users", userRouter);
+app.use("/api/v1/vehicles", vehicleRouter);
+app.use("/api/v1/registrations", registrationRouter);
 
 export { app }
