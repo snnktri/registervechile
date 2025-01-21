@@ -16,9 +16,10 @@ const regSchema = new Schema({
         status: {
              type: String, enum: ['active', 'expired', 'suspended'], default: 'active' 
             },
-        // registrationFee: {
-        //      type: Number, required: true 
-        //     },
+         registrationFee: {
+             type: Number,
+             required: true 
+            },
         registrationStatus: {
             type: String,
             enum: ['pending', 'approved', 'rejected'],

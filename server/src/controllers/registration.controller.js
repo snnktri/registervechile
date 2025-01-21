@@ -4,6 +4,9 @@ import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponses.js";
 import { Registration } from "../models/registration.model.js";
 import { Vehicle } from "../models/vehicle.model.js";
+import { v4 as uuidv4 } from 'uuid';
+import crypto from "crypto";
+import axios from "axios";
 
 const registerVehicle = asyncHandler( async(req, res) => {
     //get the vehicle details from the form
@@ -15,7 +18,7 @@ const registerVehicle = asyncHandler( async(req, res) => {
     //find data is inserted or not
     //return the response
 
-    const { registrationDate,expiryDate, status, registrationStatus } = req.body;
+    const { registrationDate,expiryDate, status, registrationStatus, registrationFee } = req.body;
 
     //console.log(req.body);
 
@@ -23,14 +26,47 @@ const registerVehicle = asyncHandler( async(req, res) => {
         throw new ApiError(400, "All fields must be filled.");
     }
 
+    const transaction_uuid = uuidv4();
+
+    console.log("UUID:"+transaction_uuid);
+
+    const parsedAmount = parseFloat(registrationFee);
+
+    const dataToHash = `total_amount=${parsedAmount},transaction_uuid=${transaction_uuid},product_code=${process.env.MERCHANT_ID}`;
+
+
+    const secretId = process.env.SECRET;
+
+    const signature = crypto.createHmac('sha256', secretId)
+                         .update(dataToHash)
+                         .digest('base64');
+
+    let paymentData = {
+        amount: parsedAmount,
+        failure_url: process.env.FAILURE_URL,
+        product_code: process.env.MERCHANT_ID,
+        signed_field_names: "total_amount,transaction_uuid,product_code",
+        success_url: process.env.SUCCESS_URL,
+        product_delivery_charge: "0",
+        product_service_charge: "0",
+        tax_amount: "0",
+        total_amount: registrationFee,
+        transaction_uuid: transaction_uuid,
+        signature: signature
+      };
+
+      console.log(paymentData);
+
+
     const ownerId = req.user._id;
+    //console.log(ownerId);
     const vehicleId = await Vehicle.findOne({
         owner: ownerId
     })
 
     const existUser = await User.findById(ownerId);
 
-    console.log(existUser);
+   // console.log(existUser);
     if(!existUser) {
         throw new ApiError(409, "User does not exist.");
     }
@@ -38,7 +74,7 @@ const registerVehicle = asyncHandler( async(req, res) => {
     
 
     const existVehicle = await Vehicle.findById(vehicleId);
-    console.log(existVehicle)
+   // console.log(existVehicle)
     if(!existVehicle) {
         throw new ApiError(409, "Vechile does not exist.");
     }
@@ -50,13 +86,51 @@ const registerVehicle = asyncHandler( async(req, res) => {
         throw new ApiError(409, "Vehicle already registered.");
     }
 
+    // payment gateway
+
+    // try {
+    //     const paymentResponse = await axios.post(process.env.ESEWAPAYMENT_URL, null, {
+    //       params: paymentData,
+    //     });
+
+    //     if (paymentResponse.status !== 200) {
+    //         throw new ApiError(500, "Payment Gateway Error: Payment Failed");
+    //     }
+    //   } catch (error) {
+    //     if (error.response) {
+    //       // The request was made and the server responded with a status code
+    //       // that falls out of the range of 2xx
+    //       console.error('Error Response Data:', error.response.data);
+    //       console.error('Error Response Status:', error.response.status);
+    //       console.error('Error Response Headers:', error.response.headers);
+    //       throw new ApiError(error.response.status, `Payment Gateway Error: ${error.response.data.message || 'Unknown error'}`);
+    //     } else if (error.request) {
+    //       // The request was made but no response was received
+    //       console.error('Error Request Data:', error.request);
+    //       throw new ApiError(500, 'No response from payment gateway');
+    //     } else {
+    //       // Something happened in setting up the request that triggered an Error
+    //       console.error('Error Message:', error.message);
+    //       throw new ApiError(500, `Request setup failed: ${error.message}`);
+    //     }
+    //   }
+    
+        const paymentResponse = await axios.post(process.env.ESEWAPAYMENT_URL, null, {
+          params: paymentData,
+        });
+
+        if (paymentResponse.status !== 200) {
+            throw new ApiError(500, "Payment Gateway Error: Payment Failed");
+        }
+
     const regVehicle = await Registration.create({
         vehicle: vehicleId,
         owner: ownerId,
         registrationDate,
         expiryDate,
         status,
-        registrationStatus
+        registrationStatus,
+        registrationFee,
     })
 
     const enterVehicle = await Registration.findById(regVehicle._id);
@@ -69,7 +143,8 @@ const registerVehicle = asyncHandler( async(req, res) => {
     status(201).
     json(new ApiResponse(
         201,
-        { vehicle: enterVehicle },
+        { vehicle: enterVehicle,
+         },
         "Vechile registration successfull"
     ));
  });
